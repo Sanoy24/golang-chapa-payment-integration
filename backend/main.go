@@ -77,8 +77,8 @@ func main() {
 		}
 
 		requestBody.TransactionReference = fmt.Sprintf("chapa-%d", time.Now().UnixNano()) // Generate a unique transaction reference
-		requestBody.ReturnUrl = "http://localhost:5173/success"                           // Set your return URL
-		requestBody.CallBackUrl = "https://4ac05164d265.ngrok-free.app/chapa-callback"    // Set your callback URL
+		requestBody.ReturnUrl = "<your-frontend-domain>/success"                          // Set your return URL
+		requestBody.CallBackUrl = "<yourdomain>/chapa-callback"                           // Set your callback URL
 
 		var chapaSuccessResponse ChapaSuccessResponse
 		var errorResponse ChapaErrorResponse
