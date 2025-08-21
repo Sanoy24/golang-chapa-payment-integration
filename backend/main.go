@@ -69,12 +69,16 @@ func main() {
 		})
 	})
 
-	router.POST("/initialize-paymnet", func(ctx *gin.Context) {
+	router.POST("/initialize-payment", func(ctx *gin.Context) {
 		var requestBody RequestBody
 		if err := ctx.ShouldBindJSON(&requestBody); err != nil {
 			ctx.JSON(400, gin.H{"error": "Invalid request body"})
 			return
 		}
+
+		requestBody.TransactionReference = fmt.Sprintf("chapa-%d", time.Now().UnixNano()) // Generate a unique transaction reference
+		requestBody.ReturnUrl = "http://localhost:5173/success"                           // Set your return URL
+		requestBody.CallBackUrl = "https://4ac05164d265.ngrok-free.app/chapa-callback"    // Set your callback URL
 
 		var chapaSuccessResponse ChapaSuccessResponse
 		var errorResponse ChapaErrorResponse
@@ -110,37 +114,36 @@ func main() {
 		})
 	})
 
-	router.POST("/chapa-callback", func(ctx *gin.Context) {
-		var callbackData map[string]interface{}
-		if err := ctx.ShouldBindJSON(&callbackData); err != nil {
-			ctx.JSON(400, gin.H{"error": "invalid callback data"})
+	router.GET("/chapa-callback", func(ctx *gin.Context) {
+		trxRef := ctx.Query("trx_ref")
+		refID := ctx.Query("ref_id")
+		status := ctx.Query("status")
+		if trxRef == "" || refID == "" || status == "" {
+			ctx.JSON(400, gin.H{"error": "Missing required query parameters"})
+			return
+		}
+		fmt.Printf("Callback received: trx_ref=%s, ref_id=%s, status=%s\n", trxRef, refID, status)
+
+		var verifyResponse map[string]any
+
+		_, err := client.R().SetAuthToken(configData.ChapaAPIKey).SetResult(&verifyResponse).Get(fmt.Sprintf("https://api.chapa.co/v1/transaction/verify/%s", trxRef))
+		if err != nil {
+			ctx.JSON(500, gin.H{"error": "Failed to verify transaction"})
+			fmt.Println("Error verifying transaction:", err)
 			return
 		}
 
-		// Example: extract tx_ref
-		txRef, _ := callbackData["tx_ref"].(string)
+		fmt.Println("Verification response:", verifyResponse)
+		ctx.JSON(http.StatusOK, gin.H{
+			"message": "Transaction verified",
+			"data":    verifyResponse,
+		})
 
-		// 🔍 Verify with Chapa API
-		var verifyResp map[string]interface{}
-		response, err := client.R().
-			SetHeader("Authorization", "Bearer "+configData.ChapaAPIKey).
-			SetResult(&verifyResp).
-			Get("https://api.chapa.co/v1/transaction/verify/" + txRef)
-
-		if err != nil || response.StatusCode() != 200 {
-			ctx.JSON(500, gin.H{"error": "failed to verify payment"})
-			return
-		}
-
-		// ✅ Save to DB (pseudo code, you can replace with real DB code)
-		fmt.Println("Saving to DB:", verifyResp)
-
-		ctx.JSON(200, gin.H{"message": "payment verified", "data": verifyResp})
 	})
-
-	router.GET("/payment-success", func(ctx *gin.Context) {
-		ctx.HTML(200, "success.html", gin.H{
-			"message": "Payment successful! Thank you 🎉",
+	router.GET("payment-success", func(ctx *gin.Context) {
+		ctx.JSON(200, gin.H{
+			"message": "Payment was successful",
+			"data":    "You can now access the services you paid for.",
 		})
 	})
 
@@ -150,7 +153,7 @@ func main() {
 	}
 
 	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGHUP, syscall.SIGTERM)
+	signal.Notify(quit, syscall.SIGHUP, syscall.SIGTERM, os.Interrupt)
 
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {

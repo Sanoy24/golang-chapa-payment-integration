@@ -10,6 +10,7 @@ import (
 type ConfigData struct {
 	ChapaAPIKey string
 	ServerPort  string
+	BaseUrl     string
 }
 
 func setupConfig() *ConfigData {
@@ -18,8 +19,11 @@ func setupConfig() *ConfigData {
 	}
 	chapaAPIKey := os.Getenv("CHAPA_API_TOKEN")
 	serverPort := os.Getenv("PORT")
+	baseUrl := os.Getenv("BASE_URL")
+	fmt.Println("Chapa API Key:", chapaAPIKey)
 	return &ConfigData{
 		ChapaAPIKey: chapaAPIKey,
 		ServerPort:  serverPort, // Default port
+		BaseUrl:     baseUrl,
 	}
 }
